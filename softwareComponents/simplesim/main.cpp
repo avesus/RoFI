@@ -9,15 +9,18 @@
 #include "simulation.hpp"
 
 
-rofi::configuration::Rofibot readConfigurationFromFile( const std::string & cfgFileName )
+std::shared_ptr< const rofi::configuration::Rofibot > readConfigurationFromFile(
+        const std::string & cfgFileName )
 {
     auto inputCfgFile = std::ifstream( cfgFileName );
     if ( !inputCfgFile.is_open() ) {
         throw std::runtime_error( "Cannot open file '" + cfgFileName + "'" );
     }
 
-    auto configuration = rofi::configuration::readOldConfigurationFormat( inputCfgFile );
-    auto modules = configuration.modules();
+    auto configuration = std::make_shared< rofi::configuration::Rofibot >(
+            rofi::configuration::readOldConfigurationFormat( inputCfgFile ) );
+    assert( configuration );
+    auto modules = configuration->modules();
     if ( modules.size() != 0 ) {
         const auto & firstModule = modules.begin()->module;
         assert( firstModule.get() );
@@ -27,20 +30,20 @@ rofi::configuration::Rofibot readConfigurationFromFile( const std::string & cfgF
                                                                          Vector( { 0, 0, 0 } ),
                                                                          identity );
     }
-    if ( auto [ ok, str ] = configuration.isValid( rofi::configuration::SimpleColision() ); !ok ) {
+    configuration->prepare();
+    if ( auto [ ok, str ] = configuration->isValid( rofi::configuration::SimpleColision() ); !ok ) {
         throw std::runtime_error( str );
     }
     return configuration;
 }
 
 
-[[nodiscard]] rofi::simplesim::Controller runSimplesim( rofi::configuration::Rofibot configuration )
+[[nodiscard]] rofi::simplesim::Controller runSimplesim(
+        std::shared_ptr< const rofi::configuration::Rofibot > rofibotConfiguration )
 {
     using namespace rofi::simplesim;
 
-    auto gzMaster = startGazeboMaster();
-
-    auto simulation = std::make_shared< Simulation >( std::move( configuration ) );
+    auto simulation = std::make_shared< Simulation >( std::move( rofibotConfiguration ) );
     auto communication = std::make_shared< Communication >( simulation->commandHandler() );
 
     return Controller::runRofiController( std::move( simulation ), std::move( communication ) );
@@ -60,6 +63,7 @@ int main( int argc, char * argv[] )
     std::cout << "Reading configuration from file" << std::endl;
     auto configuration = readConfigurationFromFile( *inputCfgFileName );
 
+    auto gzMaster = rofi::simplesim::startGazeboMaster();
     std::cout << "Starting simplesim..." << std::endl;
     auto controller = runSimplesim( std::move( configuration ) );
     std::cout << "Simulating..." << std::endl;
