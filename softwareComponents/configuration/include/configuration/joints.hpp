@@ -14,6 +14,8 @@
 
 namespace rofi::configuration {
 
+using namespace rofi::configuration::matrices;
+
 class RigidJoint;
 class RotationJoint;
 
